@@ -1,0 +1,56 @@
+name: Reconstruire l'index
+
+# Tous les jours à 05h00 UTC (07h00 à Bruxelles), plus déclenchement manuel.
+# Le pipeline FLTR publie en général vers 8h45 : l'index rattrape donc les
+# articles de la veille chaque matin.
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+# Le jeton fourni par Actions doit pouvoir committer l'index régénéré.
+permissions:
+  contents: write
+
+concurrency:
+  group: index
+  cancel-in-progress: false
+
+jobs:
+  reconstruire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # « extended » embarque le binaire Pagefind : sans lui, le paquet Python
+      # ne trouve aucun exécutable et la construction échoue.
+      - name: Installer les dépendances
+        run: pip install --quiet requests "pagefind[extended]>=1.5.2"
+
+      - name: Construire l'index
+        run: python3 build_index.py --out pagefind
+
+      - name: Publier si l'index a changé
+        run: |
+          if git diff --quiet -- pagefind; then
+            echo "Index inchangé — rien à publier."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pagefind
+          git commit -m "index reconstruit — $(date -u '+%d/%m/%Y %H:%M UTC')"
+          git push
+
+      # Miroir Codeberg. L'étape reste inerte tant que le secret CODEBERG_TOKEN
+      # n'existe pas : la reconstruction GitHub n'en dépend pas.
+      - name: Répliquer sur Codeberg
+        if: ${{ env.CODEBERG_TOKEN != '' }}
+        env:
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+        run: |
+          git push "https://davanac:${CODEBERG_TOKEN}@codeberg.org/davanac/fltr-search-index.git" HEAD:main

@@ -27,7 +27,11 @@ Les articles réservés aux membres restent indexés sur leur titre et leur extr
 
 ## Comment il est construit
 
-Par [`search_index_build.py`](https://github.com/davanac/FLTR) dans le dépôt FLTR : Content API Ghost (`formats=plaintext`) → enregistrements Pagefind → dossier `pagefind/`. La reconstruction est automatique et le résultat est poussé ici.
+Par [`build_index.py`](build_index.py) : Content API Ghost (`formats=plaintext`) → enregistrements Pagefind → dossier `pagefind/`.
+
+Le script ne demande **aucun secret** : la clé du Content API de Ghost est publique, le site la publie dans son `<head>`. Le script la lit là si la variable `GHOST_CONTENT_KEY` est absente, ce qui évite une panne silencieuse en cas de rotation.
+
+La reconstruction tourne dans une GitHub Action ([`reconstruire-index.yml`](.github/workflows/reconstruire-index.yml)) tous les jours à 05h00 UTC, et se déclenche aussi à la main. Elle ne committe que si l'index a changé.
 
 ## Utilisation
 

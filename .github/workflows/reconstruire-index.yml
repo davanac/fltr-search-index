@@ -34,10 +34,17 @@ jobs:
       - name: Construire l'index
         run: python3 build_index.py --out pagefind
 
-      - name: Publier si l'index a changé
+      # Pagefind renomme à chaque construction ses fichiers de filtres et son
+      # fichier meta (hachage non déterministe), alors que les 899 fragments et
+      # les 65 tranches d'index sont nommés d'après leur contenu, donc stables.
+      # On ne juge donc « changé » que sur ces deux dossiers : sinon l'historique
+      # accumulerait un commit par jour sans qu'aucun article n'ait bougé.
+      - name: Publier si le corpus a changé
         run: |
-          if git diff --quiet -- pagefind; then
-            echo "Index inchangé — rien à publier."
+          if [ -z "$(git status --porcelain -- pagefind/fragment pagefind/index)" ]; then
+            echo "Aucun article ajouté ni modifié — reconstruction abandonnée."
+            git checkout -- pagefind
+            git clean -qfd pagefind
             exit 0
           fi
           git config user.name  "github-actions[bot]"
